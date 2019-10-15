@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script type="module-shim">
+  // This type=module-shim won't be processed until es-module-shims.js is loaded
+  import { LitElement, html} from 'lit-element';
+
+  export class SimpleGreeting extends LitElement {
+    render() {
+      return html`<p>Hello, modules!</p>`;
+    }
+  }
+  customElements.define("simple-greeting", SimpleGreeting);
+
+  </script>
+</head>
+<body>
+  Steps to reproduce
+  <ol>
+    <li>Enable <code>native-file-system-api</code> in <code>chrome://flags</code>
+    <li>Create a node_modules containing lit-element, e.g. <code>npm install lit-element</code>
+    <li>Click <code>The button</code> and point it to the <code>node_modules</code> directory
+  </ol>
+  <button id=thebutton autofocus>The button</button>
+
+  <simple-greeting></simple-greeting>
+
+  <script>
+    document.getElementById('thebutton').addEventListener("click", async event => {
+      // Must do this in a user action
+      window.node_modules = await window.chooseFileSystemEntries({type: "openDirectory"})
+
+      const el = document.createElement("script");
+      el.setAttribute("src", "es-module-shims.js")
+      document.head.appendChild(el);
+    });
+  </script>
+</body>
+</html>
