@@ -501,6 +501,9 @@
   }
 
   async function resolveFromFs (parent, path) {
+    if (!parent.isDirectory) {
+      return null;
+    }
     let firstSlash = path.indexOf('/');
     if (firstSlash === -1) {
       return getFileOrDir(parent, path);
@@ -508,6 +511,9 @@
       let first = path.substring(0, firstSlash);
       let rest = path.substring(firstSlash + 1);
       let dir = await getFileOrDir(parent, first);
+      if (dir == null) {
+        return null;
+      }
       return resolveFromFs(dir, rest);
     }
   }
@@ -519,36 +525,57 @@
       try {
         return await parent.getDirectory(name);
       } catch (e2) {
-        console.log(e, e2);
+//        console.log(e, e2);
         return null;
       }
     }
   }
 
   async function resolveModule (id, parentUrl) {
+    let parentPath = "";
     if (parentUrl && parentUrl.startsWith("module://")) {
-      // TODO resolve relative to the parent module location instead only looking for top-level modules
+      parentPath = parentUrl.substring("module://".length);
     }
 
-    let handle = await resolveFromFs(window.node_modules, id);
+    while(true) {
+      let pathToResolve = id;
+      if (parentPath !== "") {
+        pathToResolve = parentPath + "/node_modules/" + id;
+      }
+      let resolved = await tryResolveModule(pathToResolve);
+
+      if (resolved !== null) {
+        return resolved;
+      }
+
+      let lastSlash = parentPath.lastIndexOf("/");
+      if (lastSlash === -1 && parentPath === "") {
+        throw Error("Could not find module " + id + " for " + parentUrl)
+      }
+      parentPath = parentPath.substring(0, lastSlash);
+    }
+  }
+
+  async function tryResolveModule (path) {
+    let handle = await resolveFromFs(window.node_modules, path);
     if (!handle) {
-      throw Error("Cannot resolve " + id);
+      return null;
     } else if (handle.isDirectory) {
       let packageJsonHandle = await resolveFromFs(handle, "package.json");
       if (!packageJsonHandle) {
-        throw new Error(id + " does not resolve to a file nor to a directory containing package.json")
+        return null;
       }
       let packageJsonFile = await packageJsonHandle.getFile();
       let packageJson = JSON.parse(await packageJsonFile.text());
       // TODO support other keys such as "main"
       let module = packageJson.module;
       if (module) {
-        return "module://" + id + "/" + module;
+        return "module://" + path + "/" + module;
       } else {
-        throw Error("No 'module' entry in package.json for " + url);
+        return null;
       }
     } else if (handle.isFile){
-      return "module://" + id;
+      return "module://" + path;
     } else {
       throw Error("Unsupported handle: " + handle);
     }
